@@ -33,6 +33,12 @@ class BandStructureGUI:
         self.cbm_value = None
         self.band_gap = None
         self.filename = None
+        self.cbm_k_point = None
+        self.vbm_k_point = None
+        
+        # Store session information
+        self.session_time = "2025-05-17 18:16:07"
+        self.current_user = "ShahnilZulkarnain"
         
         self.create_widgets()
         
@@ -96,6 +102,14 @@ class BandStructureGUI:
         
         self.results_text = tk.Text(self.results_frame, height=10, wrap=tk.WORD)
         self.results_text.pack(fill='both', expand=True)
+        
+        # Add session information
+        self.add_session_info()
+    
+    def add_session_info(self):
+        """Add session information to the results text"""
+        self.results_text.insert('end', f"Session started at: {self.session_time} UTC\n")
+        self.results_text.insert('end', f"User: {self.current_user}\n\n")
     
     def upload_file(self):
         self.filename = filedialog.askopenfilename(
@@ -109,37 +123,69 @@ class BandStructureGUI:
                 messagebox.showerror("Error", f"Error reading file: {str(e)}")
     
     def separate_bands_and_get_kpoints(self):
-        df = pd.read_csv(self.filename, header=None, names=['k_point', 'energy'])
-        
-        # Find the index of the first occurrence of 0 and 1 in the 'k_point' column
-        first_zero_index = df.loc[(df['k_point'] >= 0 - 1e-9) & (df['k_point'] <= 0 + 1e-9)].index.min()
-        first_one_index = df.loc[(df['k_point'] >= 1 - 1e-9) & (df['k_point'] <= 1 + 1e-9)].index.min()
-        
-        # The number of k-points is the difference between these indices
-        num_k_points = first_one_index - first_zero_index + 1
-        self.results_text.insert('end', f"Detected number of k-points per band: {num_k_points}\n")
-        
-        # Collect k-points for the first band
-        self.k_points = df['k_point'][first_zero_index : first_one_index + 1].tolist()
-        self.results_text.insert('end', "\nK-points for the bands (in Brillouin zone units):\n")
-        self.results_text.insert('end', f"{self.k_points}\n")
-        
-        energy_values = df['energy'].tolist()
-        self.bands = []
-        start_index = 0
-        while start_index < len(energy_values):
-            end_index = start_index + num_k_points
-            band = energy_values[start_index:end_index]
-            # Remove the (number of k-points + 1)-th data point if it exists
-            if len(band) > num_k_points:
-                band.pop()
-            if band:  # Only add non-empty bands
-                self.bands.append(band)
-            start_index += (num_k_points + 1)
-        
-        self.total_bands = len(self.bands)
-        self.results_text.insert('end', f"\nTotal number of band sets created: {self.total_bands}\n")
-        self.results_text.see('end')
+        try:
+            # Read CSV without predefined column names first to check number of columns
+            df = pd.read_csv(self.filename, header=None)
+            
+            if len(df.columns) == 2:
+                # For 2-column files, proceed as before
+                df.columns = ['k_point', 'energy']
+                # Convert columns to float
+                df = df.astype(float)
+            elif len(df.columns) == 4:
+                # For 4-column files, rename columns and concatenate the data
+                df.columns = ['k_point1', 'energy1', 'k_point2', 'energy2']
+                # Convert all columns to float
+                df = df.astype(float)
+                
+                # Create new dataframe with concatenated data
+                df_combined = pd.DataFrame({
+                    'k_point': pd.concat([df['k_point1'], df['k_point2']], ignore_index=True),
+                    'energy': pd.concat([df['energy1'], df['energy2']], ignore_index=True)
+                })
+                df = df_combined
+            else:
+                messagebox.showerror("Error", "CSV file must have either 2 or 4 columns")
+                return
+            
+            # Find the index of the first occurrence of 0 and 1 in the 'k_point' column
+            first_zero_index = df.loc[(df['k_point'] >= 0 - 1e-9) & (df['k_point'] <= 0 + 1e-9)].index.min()
+            first_one_index = df.loc[(df['k_point'] >= 1 - 1e-9) & (df['k_point'] <= 1 + 1e-9)].index.min()
+            
+            if first_zero_index is None or first_one_index is None:
+                messagebox.showerror("Error", "Could not find required k-points (0 and 1) in the data")
+                return
+            
+            # The number of k-points is the difference between these indices
+            num_k_points = first_one_index - first_zero_index + 1
+            self.results_text.insert('end', f"Detected number of k-points per band: {num_k_points}\n")
+            
+            # Collect k-points for the first band
+            self.k_points = df['k_point'][first_zero_index : first_one_index + 1].tolist()
+            self.results_text.insert('end', "\nK-points for the bands (in Brillouin zone units):\n")
+            self.results_text.insert('end', f"{self.k_points}\n")
+            
+            energy_values = df['energy'].tolist()
+            self.bands = []
+            start_index = 0
+            while start_index < len(energy_values):
+                end_index = start_index + num_k_points
+                band = energy_values[start_index:end_index]
+                # Remove the (number of k-points + 1)-th data point if it exists
+                if len(band) > num_k_points:
+                    band.pop()
+                if band:  # Only add non-empty bands
+                    self.bands.append(band)
+                start_index += (num_k_points + 1)
+            
+            self.total_bands = len(self.bands)
+            self.results_text.insert('end', f"\nTotal number of band sets created: {self.total_bands}\n")
+            self.results_text.see('end')
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error processing file: {str(e)}\nPlease ensure all values in the CSV file are numbers.")
+            self.clear_all()
+            return
     
     def clear_plot(self):
         for widget in self.plot_tab.winfo_children():
@@ -147,6 +193,7 @@ class BandStructureGUI:
     
     def clear_text(self):
         self.results_text.delete(1.0, tk.END)
+        self.add_session_info()
     
     def clear_all(self):
         self.clear_plot()
@@ -162,6 +209,8 @@ class BandStructureGUI:
         self.vbm_value = None
         self.cbm_value = None
         self.band_gap = None
+        self.cbm_k_point = None
+        self.vbm_k_point = None
         self.file_label.config(text="No file selected")
     
     def show_band_structure(self):
@@ -172,6 +221,24 @@ class BandStructureGUI:
         self.classify_material()
         self.plot_bands()
         self.notebook.select(self.plot_tab)
+    
+    def show_extremum_info(self, k_point_value, carrier_type):
+        """
+        Display information about the extremum point and band gap type
+        """
+        if carrier_type == 'electron':
+            self.cbm_k_point = k_point_value
+            self.results_text.insert('end', f"CBM found at k = {k_point_value:.4f}\n")
+        else:  # hole
+            self.vbm_k_point = k_point_value
+            self.results_text.insert('end', f"VBM found at k = {k_point_value:.4f}\n")
+        
+        # Check if we have both CBM and VBM k-points to determine band gap type
+        if self.cbm_k_point is not None and self.vbm_k_point is not None:
+            if abs(self.cbm_k_point - self.vbm_k_point) < 1e-6:  # Using small threshold for float comparison
+                self.results_text.insert('end', "Direct Band Gap\n")
+            else:
+                self.results_text.insert('end', "Indirect Band Gap\n")
     
     def classify_material(self):
         self.is_metal = False
@@ -326,20 +393,26 @@ class BandStructureGUI:
         ttk.Button(dialog, text="Calculate", command=calculate).pack(pady=10)
     
     def calculate_electron_effective_mass(self, lattice_parameter_angstrom):
-        return self._calculate_effective_mass(
+        mass = self._calculate_effective_mass(
             self.k_points,
             self.bands[self.cbm_band_index],
             lattice_parameter_angstrom,
             find_minimum=True
         )
-    
+        if mass is not None:
+            self.show_extremum_info(self.k_points[np.argmin(self.bands[self.cbm_band_index])], 'electron')
+        return mass
+
     def calculate_hole_effective_mass(self, lattice_parameter_angstrom):
-        return self._calculate_effective_mass(
+        mass = self._calculate_effective_mass(
             self.k_points,
             self.bands[self.vbm_band_index],
             lattice_parameter_angstrom,
             find_minimum=False
         )
+        if mass is not None:
+            self.show_extremum_info(self.k_points[np.argmax(self.bands[self.vbm_band_index])], 'hole')
+        return mass
     
     def _calculate_effective_mass(self, k_points_bz, band, lattice_parameter_angstrom, find_minimum=True):
         if len(k_points_bz) < 3 or lattice_parameter_angstrom <= 0:
@@ -349,14 +422,27 @@ class BandStructureGUI:
         delta_k = k_points_m_inv[1] - k_points_m_inv[0]
         extreme_index = np.argmin(band) if find_minimum else np.argmax(band)
         
-        if extreme_index > 0 and extreme_index < len(band) - 1:
+        # Handle both internal points and edge points
+        if extreme_index == 0:  # Left edge (k = 0)
+            # Use forward difference approximation
+            d2E_dk2_ev_bz2 = (band[2] - 2 * band[1] + band[0]) / (
+                (k_points_bz[1] - k_points_bz[0]) ** 2
+            )
+        elif extreme_index == len(band) - 1:  # Right edge (k = 1)
+            # Use backward difference approximation
+            d2E_dk2_ev_bz2 = (band[-3] - 2 * band[-2] + band[-1]) / (
+                (k_points_bz[-1] - k_points_bz[-2]) ** 2
+            )
+        else:  # Internal points
+            # Use central difference approximation
             d2E_dk2_ev_bz2 = (band[extreme_index + 1] - 2 * band[extreme_index] + band[extreme_index - 1]) / (
                 (k_points_bz[extreme_index + 1] - k_points_bz[extreme_index - 1]) ** 2
             )
-            d2E_dk2_j_m2 = d2E_dk2_ev_bz2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
-            effective_mass_kg = (hbar_js ** 2) / d2E_dk2_j_m2
-            return abs(effective_mass_kg)
-        return None
+        
+        d2E_dk2_j_m2 = d2E_dk2_ev_bz2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
+        effective_mass_kg = (hbar_js ** 2) / d2E_dk2_j_m2
+        
+        return abs(effective_mass_kg)
 
 if __name__ == "__main__":
     root = tk.Tk()
