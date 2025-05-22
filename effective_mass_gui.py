@@ -13,6 +13,8 @@ hbar_evs = 6.582176807e-16  # eV s
 hbar_js = 1.05457e-34  # J s
 # Conversion factor from eV to Joules
 eV_to_J = 1.60218e-19
+#Electron mass in kg
+m_e_kg = 9.10938356e-31
 
 class BandStructureGUI:
     def __init__(self, root):
@@ -35,6 +37,7 @@ class BandStructureGUI:
         self.filename = None
         self.cbm_k_point = None
         self.vbm_k_point = None
+        self.intermediate_bands_indices = None  # Add this line
         
         # Store session information
         self.session_time = "2025-05-17 18:16:07"
@@ -211,6 +214,7 @@ class BandStructureGUI:
         self.band_gap = None
         self.cbm_k_point = None
         self.vbm_k_point = None
+        self.intermediate_bands_indices = None  # Add this line
         self.file_label.config(text="No file selected")
     
     def show_band_structure(self):
@@ -244,6 +248,7 @@ class BandStructureGUI:
         self.is_metal = False
         self.conduction_bands_indices = []
         self.valence_bands_indices = []
+        self.intermediate_bands_indices = [] 
         self.vbm_value = -float('inf')
         self.cbm_value = float('inf')
         self.vbm_band_index = None
@@ -252,7 +257,11 @@ class BandStructureGUI:
         for i, band in enumerate(self.bands):
             positive_energies = any(e > 1e-9 for e in band)
             negative_energies = any(e < -1e-9 for e in band)
-            
+            # Check for intermediate band (values between -0.1 and 0.1)
+            if all(-0.1 <= e <= 0.1 for e in band):
+                self.results_text.insert('end', f"\nBand {i+1} is an intermediate band (values between -0.1 and 0.1 eV).\n")
+                self.intermediate_bands_indices.append(i) 
+                continue
             if positive_energies and negative_energies:
                 self.is_metal = True
                 self.results_text.insert('end', f"\nBand {i+1} contains both positive and negative energy values.\n")
@@ -297,7 +306,7 @@ class BandStructureGUI:
                     label = 'CBM' if index == self.cbm_band_index else 'Conduction Band'
                     ax.plot(self.k_points, self.bands[index], color=color, 
                            label=label if index == self.cbm_band_index else None)
-            
+        
             # Plot valence bands
             if self.valence_bands_indices:
                 for index in self.valence_bands_indices:
@@ -305,7 +314,13 @@ class BandStructureGUI:
                     label = 'VBM' if index == self.vbm_band_index else 'Valence Band'
                     ax.plot(self.k_points, self.bands[index], color=color, 
                            label=label if index == self.vbm_band_index else None)
-            
+        
+            # Plot intermediate bands
+            if self.intermediate_bands_indices:
+                for index in self.intermediate_bands_indices:
+                    ax.plot(self.k_points, self.bands[index], color='gray', linestyle='--',
+                           label='Intermediate Band' if index == self.intermediate_bands_indices[0] else None)
+        
             # Create legend
             legend_handles = []
             legend_labels = []
@@ -319,6 +334,9 @@ class BandStructureGUI:
                 legend_labels.append('VBM')
                 legend_handles.append(Line2D([0], [0], color='cornflowerblue'))
                 legend_labels.append('Valence Band')
+            if self.intermediate_bands_indices:  # Add this block
+                legend_handles.append(Line2D([0], [0], color='gray', linestyle='--'))
+                legend_labels.append('Intermediate Band')
             
             # Remove duplicate handles and labels
             by_label = dict(zip(legend_labels, legend_handles))
@@ -440,8 +458,8 @@ class BandStructureGUI:
             )
         
         d2E_dk2_j_m2 = d2E_dk2_ev_bz2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
-        effective_mass_kg = (hbar_js ** 2) / d2E_dk2_j_m2
-        
+        effective_mass_kg = (hbar_js ** 2) / d2E_dk2_j_m2 
+                
         return abs(effective_mass_kg)
 
 if __name__ == "__main__":
