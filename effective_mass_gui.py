@@ -282,6 +282,21 @@ class BandStructureGUI:
         
         if not self.is_metal:
             self.band_gap = self.cbm_value - self.vbm_value if self.cbm_value != float('inf') and self.vbm_value != -float('inf') else None
+            
+            # Add this new section to print VBM and CBM information
+            self.results_text.insert('end', "\n=== Band Structure Details ===\n")
+            
+            if self.vbm_band_index is not None:
+                self.results_text.insert('end', f"\nVBM Band (Index {self.vbm_band_index}):\n")
+                self.results_text.insert('end', "k-points: " + ", ".join(f"{k:.4f}" for k in self.k_points) + "\n")
+                self.results_text.insert('end', "energies: " + ", ".join(f"{e:.4f}" for e in self.bands[self.vbm_band_index]) + "\n")
+                self.results_text.insert('end', f"VBM Value: {self.vbm_value:.4f} eV\n")
+                
+            if self.cbm_band_index is not None:
+                self.results_text.insert('end', f"\nCBM Band (Index {self.cbm_band_index}):\n")
+                self.results_text.insert('end', "k-points: " + ", ".join(f"{k:.4f}" for k in self.k_points) + "\n")
+                self.results_text.insert('end', "energies: " + ", ".join(f"{e:.4f}" for e in self.bands[self.cbm_band_index]) + "\n")
+                self.results_text.insert('end', f"CBM Value: {self.cbm_value:.4f} eV\n")
     
     def plot_bands(self):
         # Clear previous plot
@@ -433,34 +448,54 @@ class BandStructureGUI:
         return mass
     
     def _calculate_effective_mass(self, k_points_bz, band, lattice_parameter_angstrom, find_minimum=True):
+        """
+        Calculate effective mass considering periodic boundary conditions
+        """
         if len(k_points_bz) < 3 or lattice_parameter_angstrom <= 0:
             return None
         
+        # Convert k-points from BZ units to m^-1
         k_points_m_inv = np.array(k_points_bz) * 2 * np.pi / (lattice_parameter_angstrom * 1e-10)
-        delta_k = k_points_m_inv[1] - k_points_m_inv[0]
+        
+        # Find extremum point
         extreme_index = np.argmin(band) if find_minimum else np.argmax(band)
         
-        # Handle both internal points and edge points
-        if extreme_index == 0:  # Left edge (k = 0)
-            # Use forward difference approximation
-            d2E_dk2_ev_bz2 = (band[2] - 2 * band[1] + band[0]) / (
+        # Calculate second derivative considering periodicity
+        if extreme_index == 0:  # At k = 0
+            # Use last point before k = 1 and first point after k = 0
+            d2E_dk2 = (band[1] - 2 * band[0] + band[-2]) / (
                 (k_points_bz[1] - k_points_bz[0]) ** 2
             )
-        elif extreme_index == len(band) - 1:  # Right edge (k = 1)
-            # Use backward difference approximation
-            d2E_dk2_ev_bz2 = (band[-3] - 2 * band[-2] + band[-1]) / (
-                (k_points_bz[-1] - k_points_bz[-2]) ** 2
+            # Print points used for calculation
+            self.results_text.insert('end', f"\n{'Electron' if find_minimum else 'Hole'} calculation points:\n")
+            self.results_text.insert('end', f"k-points: {k_points_bz[-2]:.6f}, {k_points_bz[0]:.6f}, {k_points_bz[1]:.6f}\n")
+            self.results_text.insert('end', f"energies: {band[-2]:.6f}, {band[0]:.6f}, {band[1]:.6f}\n")
+            
+        elif extreme_index == len(band) - 1:  # At k = 1
+            # Use point before k = 1 and first point (k = 0) due to periodicity
+            d2E_dk2 = (band[0] - 2 * band[-1] + band[-2]) / (
+                (k_points_bz[1] - k_points_bz[0]) ** 2
             )
+            # Print points used for calculation
+            self.results_text.insert('end', f"\n{'Electron' if find_minimum else 'Hole'} calculation points:\n")
+            self.results_text.insert('end', f"k-points: {k_points_bz[-2]:.6f}, {k_points_bz[-1]:.6f}, {k_points_bz[0]:.6f}\n")
+            self.results_text.insert('end', f"energies: {band[-2]:.6f}, {band[-1]:.6f}, {band[0]:.6f}\n")
+            
         else:  # Internal points
-            # Use central difference approximation
-            d2E_dk2_ev_bz2 = (band[extreme_index + 1] - 2 * band[extreme_index] + band[extreme_index - 1]) / (
-                (k_points_bz[extreme_index + 1] - k_points_bz[extreme_index - 1]) ** 2
+            d2E_dk2 = (band[extreme_index + 1] - 2 * band[extreme_index] + band[extreme_index - 1]) / (
+                (k_points_bz[1] - k_points_bz[0]) ** 2
             )
+            # Print points used for calculation
+            self.results_text.insert('end', f"\n{'Electron' if find_minimum else 'Hole'} calculation points:\n")
+            self.results_text.insert('end', f"k-points: {k_points_bz[extreme_index-1]:.6f}, {k_points_bz[extreme_index]:.6f}, {k_points_bz[extreme_index+1]:.6f}\n")
+            self.results_text.insert('end', f"energies: {band[extreme_index-1]:.6f}, {band[extreme_index]:.6f}, {band[extreme_index+1]:.6f}\n")
         
-        d2E_dk2_j_m2 = d2E_dk2_ev_bz2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
-        effective_mass_kg = (hbar_js ** 2) / d2E_dk2_j_m2 
-                
-        return abs(effective_mass_kg)
+        # Convert to proper units
+        d2E_dk2_j_m2 = d2E_dk2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
+        
+        # Calculate effective mass
+        effective_mass_kg = abs((hbar_js ** 2) / d2E_dk2_j_m2)
+        return effective_mass_kg
 
 if __name__ == "__main__":
     root = tk.Tk()

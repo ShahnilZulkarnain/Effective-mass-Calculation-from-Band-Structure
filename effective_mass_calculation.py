@@ -6,7 +6,7 @@ eV_to_J = 1.60218e-19  # Conversion factor from eV to Joules
 
 def calculate_effective_mass(k_points, band_energies, lattice_parameter_angstrom, find_minimum=True):
     """
-    Calculate effective mass from band structure data
+    Calculate effective mass considering periodic boundary conditions
     
     Parameters:
     k_points: array of k-points in Brillouin zone units (0 to 1)
@@ -21,19 +21,35 @@ def calculate_effective_mass(k_points, band_energies, lattice_parameter_angstrom
     # Find extremum point
     extreme_index = np.argmin(band_energies) if find_minimum else np.argmax(band_energies)
     
-    # Calculate second derivative based on position of extremum
-    if extreme_index == 0:  # Left edge
-        d2E_dk2 = (band_energies[2] - 2 * band_energies[1] + band_energies[0]) / (
+    # Calculate second derivative considering periodicity
+    if extreme_index == 0:  # At k = 0
+        # Use last point before k = 1 and first point after k = 0
+        d2E_dk2 = (band_energies[1] - 2 * band_energies[0] + band_energies[-2]) / (
             (k_points[1] - k_points[0]) ** 2
         )
-    elif extreme_index == len(band_energies) - 1:  # Right edge
-        d2E_dk2 = (band_energies[-3] - 2 * band_energies[-2] + band_energies[-1]) / (
-            (k_points[-1] - k_points[-2]) ** 2
+        # Print points used for calculation
+        print(f"\n{'Electron' if find_minimum else 'Hole'} calculation points:")
+        print(f"k-points: {k_points[-2]:.6f}, {k_points[0]:.6f}, {k_points[1]:.6f}")
+        print(f"energies: {band_energies[-2]:.6f}, {band_energies[0]:.6f}, {band_energies[1]:.6f}")
+        
+    elif extreme_index == len(band_energies) - 1:  # At k = 1
+        # Use point before k = 1 and first point (k = 0) due to periodicity
+        d2E_dk2 = (band_energies[0] - 2 * band_energies[-1] + band_energies[-2]) / (
+            (k_points[1] - k_points[0]) ** 2
         )
+        # Print points used for calculation
+        print(f"\n{'Electron' if find_minimum else 'Hole'} calculation points:")
+        print(f"k-points: {k_points[-2]:.6f}, {k_points[-1]:.6f}, {k_points[0]:.6f}")
+        print(f"energies: {band_energies[-2]:.6f}, {band_energies[-1]:.6f}, {band_energies[0]:.6f}")
+        
     else:  # Internal points
         d2E_dk2 = (band_energies[extreme_index + 1] - 2 * band_energies[extreme_index] + band_energies[extreme_index - 1]) / (
-            (k_points[extreme_index + 1] - k_points[extreme_index - 1]) ** 2
+            (k_points[1] - k_points[0]) ** 2
         )
+        # Print points used for calculation
+        print(f"\n{'Electron' if find_minimum else 'Hole'} calculation points:")
+        print(f"k-points: {k_points[extreme_index-1]:.6f}, {k_points[extreme_index]:.6f}, {k_points[extreme_index+1]:.6f}")
+        print(f"energies: {band_energies[extreme_index-1]:.6f}, {band_energies[extreme_index]:.6f}, {band_energies[extreme_index+1]:.6f}")
     
     # Convert to proper units
     d2E_dk2_j_m2 = d2E_dk2 * eV_to_J / ((2 * np.pi / (lattice_parameter_angstrom * 1e-10)) ** 2)
@@ -44,12 +60,12 @@ def calculate_effective_mass(k_points, band_energies, lattice_parameter_angstrom
 
 def main():
     # Test data with custom values
-    k_points = np.array([0, 0.08333334815419560, 0.1666666913083900, 0.250000039462586, 0.3333333613083900, 0.4166666781541960, 0.5000000000000000, 0.5833333481541960, 0.6666666913083910, 0.7500000394625860, 0.8333333613083900, 0.9166666781541960, 1])
-    
+    k_points = np.array([0.0000, 0.0833, 0.1667, 0.2500, 0.3333, 0.4167, 0.5000, 0.5833, 0.6667, 0.7500, 0.8333, 0.9167, 1.0000])
+                         
     # Replace these arrays with your VBM and CBM energy values
-    cbm_energies = np.array([0, -0.07740795032354430, -0.2431394253189060, -0.3945471001916490, -0.4792308302161480 ,-0.6638072766906750, -0.8344887744454070, -0.6638078209183430, -0.479228109077805, -0.3945487328746540, -0.2431396974327400, -0.07740822243737890, 0])
-    vbm_energies = np.array([3.446652057339760, 3.448836587201350, 3.455227996940900, 3.465460293451290, 3.474003579392320, 3.497649999477340, 3.530395089839150, 3.497651360046510 ,3.474002763050820, 3.465461654020460, 3.455230718079240, 3.448834954518340, 3.446652057339760])
-    
+    cbm_energies = np.array([3.4467, 3.4488, 3.4552, 3.4655, 3.4740, 3.4976, 3.5304, 3.4977, 3.4740, 3.4655, 3.4552, 3.4488, 3.4467])
+    vbm_energies = np.array([0.0000, -0.0774, -0.2431, -0.3945, -0.4792, -0.6638, -0.8345, -0.6638, -0.4792, -0.3945, -0.2431, -0.0774, 0.000])
+
     # Lattice parameter - replace with your material's value
     lattice_parameter = 5.866  # Angstroms
     
