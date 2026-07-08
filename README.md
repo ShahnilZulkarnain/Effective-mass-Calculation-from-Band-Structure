@@ -1,65 +1,79 @@
 # Effective Mass Calculation from Band Structure
 
 ## Description
-A Python-based GUI application for calculating effective mass from electronic band structures. This tool provides an intuitive interface for analyzing band structure data, determining band gaps, and calculating effective masses for both electrons and holes.
+A tool for calculating effective mass from electronic band structures. It analyzes band
+structure data, counts the individual bands, identifies the Conduction Band Minimum (CBM)
+and Valence Band Maximum (VBM), reports the band gap (direct/indirect), classifies the
+material as metallic or semiconducting, and calculates the electron and hole effective
+masses.
+
+There are two ways to use it:
+
+- **`index.html` — the browser app (recommended).** A single self-contained file that runs
+  in any modern web browser on Windows, macOS, or Linux. **No Python and no installation of
+  any kind.** Just open the file.
+- **`effective_mass_gui.py` — the original Python/tkinter app**, kept for reference and for
+  users who prefer the desktop version. Requires Python and several libraries.
+
+## Quick start (browser app — no install)
+1. Download **`index.html`** (from this repository).
+2. **Double-click it** — it opens in your default browser (Chrome, Edge, Safari, Firefox…).
+3. Click **Load sample data** to try it immediately, or drag-and-drop your own CSV / click
+   **Choose CSV…**.
+4. Enter your material's **lattice parameter** (in Ångström).
+5. Click **Analyze**.
+
+It works completely offline and sends no data anywhere — everything runs locally in your
+browser. You can also host `index.html` on GitHub Pages to share a link.
 
 ## Features
-- Interactive GUI for data visualization and analysis
-- Automatic band structure plotting
-- Metal/Semiconductor classification
-- VBM (Valence Band Maximum) and CBM (Conduction Band Minimum) identification
-- Band gap calculation
-- Effective mass calculation for both electrons and holes
-- Clear and intuitive data presentation
+- Zero-install, cross-platform (runs in any browser)
+- Drag-and-drop CSV upload + built-in sample data
+- Automatic detection of the number of bands and k-points per band
+- Metal / semiconductor classification and intermediate-band detection
+- VBM and CBM identification with band-gap value and **direct/indirect** classification
+- Effective mass for electrons and holes, shown in **kg and as m\*/mₑ**
+- Interactive band-structure plot with highlighted VBM/CBM
+- Export the report (`.txt`) and the parsed bands (`.csv`)
 
-## Requirements
-See `requirements.txt` for detailed dependencies. Main requirements:
-```bash
-pip install -r requirements.txt
+## Input file format
+A CSV file with **no header row**:
+
+- **2 columns:** `k, energy(eV)`
+- **4 columns:** `k1, E1, k2, E2` (two spin components; the second pair is concatenated
+  after the first)
+
+k-points run in Brillouin-zone units from `0` to `1`. Energies should be shifted so the
+Fermi level is at `0 eV` (positive → conduction, negative → valence). Bands may be separated
+by a single delimiter row, matching the original tool's data layout.
+
+## Method
+The effective mass is obtained from a finite-difference second derivative of E(k) at the band
+extremum, using periodic boundary conditions at the zone edges (k=0 and k=1):
+
+```
+m* = | ħ² / (d²E/dk²) |
 ```
 
-## Installation
-1. Clone the repository:
+with `d²E/dk²` evaluated on a 3-point stencil and converted to SI units using the lattice
+parameter. This matches the physics of the original Python implementation, so results from
+the browser app and the Python version agree.
+
+## Using the original Python version (optional)
+Requires Python 3 with the libraries in `requirements`:
 ```bash
-git clone https://github.com/ShahnilZulkarnain/Effective-mass-Calculation-from-Band-structure.git
-cd Effective-mass-Calculation-from-Band-structure
+pip install -r requirements
+python effective_mass_gui.py
 ```
-
-2. Install required packages:
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
-1. Run the application:
-```bash
-python band_structure_gui.py
-```
-
-2. Use the GUI:
-   - Click "Upload CSV File" to load your band structure data
-   - Click "Show Band Structure" to visualize the bands
-   - Use "Calculate Effective Mass" to compute effective masses
-   - Use clear buttons to reset different parts of the interface
-
-3. Input File Format:
-   - CSV file with two columns (no headers)
-   - First column: k-points in Brillouin zone units
-   - Second column: energy values in eV
-
-## Example Output
-- Band structure plot with identified VBM and CBM
-- Material classification (Metal/Semiconductor)
-- Band gap value (for semiconductors)
-- Effective mass values for electrons and holes
+`effective_mass_calculation.py` is a standalone script with hard-coded example data that
+also serves as the reference implementation of the physics.
 
 ## Author
 - **ShahnilZulkarnain**
-- Created: 2025-05-14
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## Acknowledgments
-- Built using Python's scientific computing stack (NumPy, Pandas, Matplotlib)
-- Developed for electronic structure analysis in materials science
+- Original desktop version built with Python's scientific stack (NumPy, Pandas, Matplotlib).
+- The browser app reimplements the same analysis in dependency-free JavaScript.

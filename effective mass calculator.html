@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Effective Mass Calculator — Band Structure Analyzer</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --panel: #ffffff;
+    --ink: #1b2230;
+    --muted: #5a6478;
+    --line: #dfe4ee;
+    --accent: #3a6ff0;
+    --accent-ink: #ffffff;
+    --ok: #1a9e63;
+    --warn: #c76a00;
+    --danger: #c8394a;
+    --code-bg: #0f1524;
+    --code-ink: #d7e0f5;
+    --cbm: #e06666;
+    --cbm-hi: #d98d00;
+    --vbm: #6fa8dc;
+    --vbm-hi: #2e9e57;
+    --inter: #8a94a6;
+    --shadow: 0 1px 3px rgba(20,30,60,.08), 0 6px 22px rgba(20,30,60,.06);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1220; --panel: #171d2e; --ink: #e7ecf7; --muted: #99a3ba;
+      --line: #2a3346; --accent: #5b86f5; --code-bg: #0a0f1c; --code-ink: #cdd8f2;
+      --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 26px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+  }
+  header {
+    padding: 28px 20px 20px; text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0 0 6px; font-size: 1.55rem; }
+  header p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px; display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 940px) { .wrap { grid-template-columns: 420px 1fr; align-items: start; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px;
+  }
+  .panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: var(--radius); padding: 26px 16px;
+    text-align: center; color: var(--muted); transition: .15s; cursor: pointer; background: transparent;
+  }
+  .drop.hover { border-color: var(--accent); color: var(--ink); background: rgba(90,134,245,.06); }
+  .drop strong { color: var(--ink); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button, .filelike {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    padding: 9px 14px; border-radius: 9px; cursor: pointer; transition: .12s; flex: 1 1 auto;
+  }
+  button:hover, .filelike:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.06); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .field { margin-top: 14px; }
+  .field label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  .field input {
+    width: 100%; font: inherit; padding: 9px 11px; border: 1px solid var(--line);
+    border-radius: 9px; background: var(--panel); color: var(--ink);
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 10px; }
+  .hint code { background: var(--code-bg); color: var(--code-ink); padding: 1px 6px; border-radius: 5px; font-size: .85em; }
+  .status { margin-top: 12px; font-size: .88rem; min-height: 1.2em; }
+  .status.err { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+  .results { display: grid; gap: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card .k { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .card .v { font-size: 1.15rem; font-weight: 650; margin-top: 3px; word-break: break-word; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+  .badge.semi { background: rgba(26,158,99,.15); color: var(--ok); }
+  .badge.metal { background: rgba(200,57,74,.15); color: var(--danger); }
+  .badge.direct { background: rgba(58,111,240,.15); color: var(--accent); }
+  .badge.indirect { background: rgba(199,106,0,.15); color: var(--warn); }
+  canvas { width: 100%; height: auto; display: block; border-radius: 10px; }
+  pre.log {
+    background: var(--code-bg); color: var(--code-ink); padding: 14px; border-radius: 10px;
+    overflow-x: auto; font-size: .82rem; margin: 0; white-space: pre; max-height: 420px; overflow-y: auto;
+  }
+  .toprow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .exports { display: flex; gap: 8px; }
+  .exports button { flex: 0 0 auto; padding: 6px 11px; font-size: .85rem; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 12px; }
+  footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 8px 20px 30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Effective Mass Calculator</h1>
+  <p>Analyze electronic band structures — band gap, VBM/CBM, and effective masses. Runs entirely in your browser, no install.</p>
+</header>
+
+<div class="wrap">
+  <!-- INPUT PANEL -->
+  <section class="panel">
+    <h2>1 · Load band structure</h2>
+    <div id="drop" class="drop">
+      <div><strong>Drop a CSV file here</strong></div>
+      <div style="font-size:.85rem;margin-top:4px;">or click to browse</div>
+    </div>
+    <input id="fileInput" type="file" accept=".csv,.txt" hidden>
+    <div class="btn-row">
+      <button id="browseBtn">Choose CSV…</button>
+      <button id="sampleBtn">Load sample data</button>
+    </div>
+
+    <div class="field">
+      <label for="lattice">Lattice parameter a (Ångström)</label>
+      <input id="lattice" type="number" step="any" min="0" value="5.866" placeholder="e.g. 5.866">
+    </div>
+
+    <div class="btn-row">
+      <button id="analyzeBtn" class="primary" disabled>Analyze</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="hint">
+      <strong>CSV format</strong> (no header):<br>
+      • 2 columns: <code>k, energy(eV)</code><br>
+      • 4 columns: <code>k1, E1, k2, E2</code> (two spin components, concatenated)<br>
+      k-points run in Brillouin-zone units from <code>0</code> to <code>1</code>. Energies are shifted so the Fermi level is at 0 eV.
+    </div>
+  </section>
+
+  <!-- RESULTS PANEL -->
+  <section class="panel">
+    <div class="toprow">
+      <h2 style="margin:0;">2 · Results</h2>
+      <div class="exports">
+        <button id="exportTxt" disabled>Export report (.txt)</button>
+        <button id="exportCsv" disabled>Export bands (.csv)</button>
+      </div>
+    </div>
+
+    <div id="resultsBody">
+      <div class="empty">Load data and click <strong>Analyze</strong> to see results.</div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  Open-source · works offline · based on the original
+  <em>Effective-mass-Calculation-from-Band-Structure</em> tool.
+</footer>
+
+<script>
+"use strict";
+
+/* ============================ Physics constants ============================ */
+const HBAR_JS = 1.05457e-34;     // reduced Planck constant, J·s
+const EV_TO_J = 1.60218e-19;     // eV -> Joule
+const M_E_KG  = 9.10938356e-31;  // electron rest mass, kg
+const TOL_K   = 1e-9;            // k-point matching tolerance
+const POS_EPS = 1e-9;            // energy sign threshold
+const INTER_BAND = 0.1;          // |E| <= 0.1 eV => intermediate band
+
+/* Sample dataset (from effective_mass_calculation.py) */
+const SAMPLE_CSV = [
+  [0.0000, 3.4467], [0.0833, 3.4488], [0.1667, 3.4552], [0.2500, 3.4655],
+  [0.3333, 3.4740], [0.4167, 3.4976], [0.5000, 3.5304], [0.5833, 3.4977],
+  [0.6667, 3.4740], [0.7500, 3.4655], [0.8333, 3.4552], [0.9167, 3.4488],
+  [1.0000, 3.4467],
+  // separator row (skipped by band splitter, mirrors the Python stride+1 behaviour)
+  [999, 999],
+  [0.0000, 0.0000], [0.0833, -0.0774], [0.1667, -0.2431], [0.2500, -0.3945],
+  [0.3333, -0.4792], [0.4167, -0.6638], [0.5000, -0.8345], [0.5833, -0.6638],
+  [0.6667, -0.4792], [0.7500, -0.3945], [0.8333, -0.2431], [0.9167, -0.0774],
+  [1.0000, 0.0000],
+].map(r => r.join(",")).join("\n");
+const SAMPLE_LATTICE = 5.866;
+
+/* ============================ Core: CSV parsing ============================ */
+// Returns { kPoints:[...], bands:[[...],[...]] } or throws Error with a clear message.
+function parseCSV(text) {
+  const rows = text.split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+    .map(l => l.split(/[,;\t]+/).map(s => s.trim()));
+
+  if (rows.length === 0) throw new Error("The file is empty.");
+
+  const ncol = rows[0].length;
+  if (ncol !== 2 && ncol !== 4) {
+    throw new Error("CSV must have either 2 columns (k, energy) or 4 columns (k1, E1, k2, E2). Found " + ncol + ".");
+  }
+
+  const nums = rows.map((r, i) => {
+    if (r.length !== ncol) {
+      throw new Error("Row " + (i + 1) + " has " + r.length + " values but the file uses " + ncol + " columns.");
+    }
+    return r.map(v => {
+      const f = Number(v);
+      if (!Number.isFinite(f)) throw new Error("Non-numeric value \"" + v + "\" on row " + (i + 1) + ".");
+      return f;
+    });
+  });
+
+  // Build a single (k, energy) list.
+  let ks = [], es = [];
+  if (ncol === 2) {
+    nums.forEach(r => { ks.push(r[0]); es.push(r[1]); });
+  } else {
+    // 4-col: concatenate (k1,E1) block then (k2,E2) block, matching the Python version.
+    nums.forEach(r => { ks.push(r[0]); es.push(r[1]); });
+    nums.forEach(r => { ks.push(r[2]); es.push(r[3]); });
+  }
+
+  // Detect k-points per band: first index at k≈0 and first at k≈1.
+  const firstZero = ks.findIndex(k => Math.abs(k - 0) <= TOL_K);
+  const firstOne  = ks.findIndex(k => Math.abs(k - 1) <= TOL_K);
+  if (firstZero === -1 || firstOne === -1 || firstOne <= firstZero) {
+    throw new Error("Could not find the required k-points 0 and 1 in the data. Check that k runs from 0 to 1.");
+  }
+  const numK = firstOne - firstZero + 1;
+
+  const kPoints = ks.slice(firstZero, firstOne + 1);
+
+  // Split energies into bands using stride numK, advancing numK+1 (skips 1 separator point).
+  const bands = [];
+  let start = 0;
+  while (start < es.length) {
+    let band = es.slice(start, start + numK);
+    if (band.length > numK) band.pop();
+    // Skip separator-only chunks (e.g. the 999,999 marker) — keep only real bands of length numK
+    if (band.length === numK) bands.push(band);
+    start += numK + 1;
+  }
+
+  if (bands.length === 0) throw new Error("No complete bands were found after splitting the data.");
+
+  return { kPoints, bands, numK };
+}
+
+/* ============================ Core: classification ============================ */
+function classify(bands, kPoints) {
+  const state = {
+    isMetal: false, metalBandIndex: null,
+    conduction: [], valence: [], intermediate: [],
+    vbmIndex: null, cbmIndex: null,
+    vbmValue: -Infinity, cbmValue: Infinity,
+    vbmK: null, cbmK: null,
+    bandGap: null, gapType: null,
+    notes: [],
+  };
+
+  for (let i = 0; i < bands.length; i++) {
+    const band = bands[i];
+    const hasPos = band.some(e => e > POS_EPS);
+    const hasNeg = band.some(e => e < -POS_EPS);
+
+    if (band.every(e => e >= -INTER_BAND && e <= INTER_BAND)) {
+      state.intermediate.push(i);
+      state.notes.push("Band " + (i + 1) + " is an intermediate band (all |E| ≤ 0.1 eV).");
+      continue;
+    }
+    if (hasPos && hasNeg) {
+      state.isMetal = true;
+      state.metalBandIndex = i;
+      state.notes.push("Band " + (i + 1) + " crosses the Fermi level (both + and − energies) → metallic.");
+      break;
+    }
+    if (hasNeg && !hasPos) {           // valence
+      state.valence.push(i);
+      const mx = Math.max(...band);
+      if (mx > state.vbmValue) {
+        state.vbmValue = mx; state.vbmIndex = i;
+        state.vbmK = kPoints[band.indexOf(mx)];
+      }
+    } else if (hasPos && !hasNeg) {    // conduction
+      state.conduction.push(i);
+      const mn = Math.min(...band);
+      if (mn < state.cbmValue) {
+        state.cbmValue = mn; state.cbmIndex = i;
+        state.cbmK = kPoints[band.indexOf(mn)];
+      }
+    }
+  }
+
+  if (!state.isMetal) {
+    if (state.cbmValue !== Infinity && state.vbmValue !== -Infinity) {
+      state.bandGap = state.cbmValue - state.vbmValue;
+      state.gapType = (Math.abs(state.cbmK - state.vbmK) < 1e-6) ? "Direct" : "Indirect";
+    }
+  }
+  return state;
+}
+
+/* ============================ Core: effective mass ============================ */
+// findMinimum=true for electrons (CBM), false for holes (VBM).
+function effectiveMass(kPoints, band, aAngstrom, findMinimum) {
+  if (kPoints.length < 3 || !(aAngstrom > 0)) return null;
+
+  const extIdx = findMinimum
+    ? band.indexOf(Math.min(...band))
+    : band.indexOf(Math.max(...band));
+  const dk = kPoints[1] - kPoints[0];   // uniform spacing in BZ units
+  const n = band.length;
+
+  let d2E, used;
+  if (extIdx === 0) {                    // periodic wrap at k=0
+    d2E = (band[1] - 2 * band[0] + band[n - 2]) / (dk * dk);
+    used = [[kPoints[n - 2], band[n - 2]], [kPoints[0], band[0]], [kPoints[1], band[1]]];
+  } else if (extIdx === n - 1) {         // periodic wrap at k=1
+    d2E = (band[0] - 2 * band[n - 1] + band[n - 2]) / (dk * dk);
+    used = [[kPoints[n - 2], band[n - 2]], [kPoints[n - 1], band[n - 1]], [kPoints[0], band[0]]];
+  } else {                               // interior 3-point stencil
+    d2E = (band[extIdx + 1] - 2 * band[extIdx] + band[extIdx - 1]) / (dk * dk);
+    used = [[kPoints[extIdx - 1], band[extIdx - 1]], [kPoints[extIdx], band[extIdx]], [kPoints[extIdx + 1], band[extIdx + 1]]];
+  }
+
+  // Convert d2E/dk2 (eV per BZ-unit^2) to J·m^2, then m* = |hbar^2 / (d2E/dk2)|.
+  const kScale = 2 * Math.PI / (aAngstrom * 1e-10);   // BZ unit -> m^-1
+  const d2E_J_m2 = d2E * EV_TO_J / (kScale * kScale);
+  const massKg = Math.abs((HBAR_JS * HBAR_JS) / d2E_J_m2);
+  return { massKg, massRatio: massKg / M_E_KG, extIdx, extK: kPoints[extIdx], used };
+}
+
+/* ============================ Full analysis ============================ */
+function analyze(parsed, aAngstrom) {
+  const { kPoints, bands, numK } = parsed;
+  const cls = classify(bands, kPoints);
+  const result = { kPoints, bands, numK, cls, aAngstrom, electron: null, hole: null };
+
+  if (!cls.isMetal) {
+    if (cls.cbmIndex !== null) result.electron = effectiveMass(kPoints, bands[cls.cbmIndex], aAngstrom, true);
+    if (cls.vbmIndex !== null) result.hole     = effectiveMass(kPoints, bands[cls.vbmIndex], aAngstrom, false);
+  }
+  return result;
+}
+
+/* ============================ Text report ============================ */
+function buildReport(r) {
+  const L = [];
+  const p = s => L.push(s);
+  p("=== Band Structure Analysis Report ===");
+  p("Generated: " + new Date().toISOString());
+  p("Lattice parameter a = " + r.aAngstrom + " Å");
+  p("");
+  p("k-points per band: " + r.numK);
+  p("Total bands detected: " + r.bands.length);
+  p("k-points (BZ units): " + r.kPoints.map(k => fmt(k, 4)).join(", "));
+  p("");
+  r.cls.notes.forEach(n => p(n));
+  if (r.cls.notes.length) p("");
+
+  if (r.cls.isMetal) {
+    p("Material type: METALLIC");
+    p("Effective mass is not defined for metals (no band gap).");
+    return L.join("\n");
+  }
+
+  p("Material type: SEMICONDUCTOR / INSULATOR");
+  p("");
+  if (r.cls.vbmIndex !== null) {
+    p("VBM band (index " + r.cls.vbmIndex + "):");
+    p("  energies: " + r.bands[r.cls.vbmIndex].map(e => fmt(e, 4)).join(", "));
+    p("  VBM value: " + fmt(r.cls.vbmValue, 4) + " eV at k = " + fmt(r.cls.vbmK, 4));
+  }
+  if (r.cls.cbmIndex !== null) {
+    p("CBM band (index " + r.cls.cbmIndex + "):");
+    p("  energies: " + r.bands[r.cls.cbmIndex].map(e => fmt(e, 4)).join(", "));
+    p("  CBM value: " + fmt(r.cls.cbmValue, 4) + " eV at k = " + fmt(r.cls.cbmK, 4));
+  }
+  if (r.cls.bandGap !== null) {
+    p("");
+    p("Band gap: " + fmt(r.cls.bandGap, 4) + " eV (" + r.cls.gapType + ")");
+  }
+  p("");
+  p("=== Effective Mass ===");
+  if (r.electron) {
+    p("Electron (CBM) calculation points [k, E]:");
+    r.electron.used.forEach(u => p("  " + fmt(u[0], 6) + ", " + fmt(u[1], 6)));
+    p("  Electron effective mass ≈ " + r.electron.massKg.toExponential(4) + " kg" +
+      "  (m*/mₑ = " + fmt(r.electron.massRatio, 4) + ")");
+  }
+  if (r.hole) {
+    p("Hole (VBM) calculation points [k, E]:");
+    r.hole.used.forEach(u => p("  " + fmt(u[0], 6) + ", " + fmt(u[1], 6)));
+    p("  Hole effective mass ≈ " + r.hole.massKg.toExponential(4) + " kg" +
+      "  (m*/mₑ = " + fmt(r.hole.massRatio, 4) + ")");
+  }
+  return L.join("\n");
+}
+
+function fmt(x, d) {
+  if (!Number.isFinite(x)) return String(x);
+  return x.toFixed(d);
+}
+
+/* ============================ Canvas plot ============================ */
+function drawPlot(canvas, r) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 640;
+  const cssH = Math.round(cssW * 0.62);
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue("--ink").trim() || "#1b2230";
+  const line = css.getPropertyValue("--line").trim() || "#dfe4ee";
+  const muted = css.getPropertyValue("--muted").trim() || "#5a6478";
+  const panel = css.getPropertyValue("--panel").trim() || "#fff";
+
+  const m = { l: 56, r: 18, t: 18, b: 42 };
+  const pw = cssW - m.l - m.r, ph = cssH - m.t - m.b;
+
+  // Energy range across all plotted bands.
+  let emin = Infinity, emax = -Infinity;
+  r.bands.forEach(b => b.forEach(e => { if (e < emin) emin = e; if (e > emax) emax = e; }));
+  if (!Number.isFinite(emin)) { emin = -1; emax = 1; }
+  const pad = (emax - emin) * 0.08 || 1;
+  emin -= pad; emax += pad;
+
+  const kmin = r.kPoints[0], kmax = r.kPoints[r.kPoints.length - 1];
+  const X = k => m.l + (kmax === kmin ? 0 : (k - kmin) / (kmax - kmin)) * pw;
+  const Y = e => m.t + ph - (e - emin) / (emax - emin) * ph;
+
+  // Grid + axes
+  ctx.strokeStyle = line; ctx.fillStyle = muted; ctx.lineWidth = 1;
+  ctx.font = "11px sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const yticks = 6;
+  for (let i = 0; i <= yticks; i++) {
+    const e = emin + (emax - emin) * i / yticks;
+    const y = Y(e);
+    ctx.beginPath(); ctx.moveTo(m.l, y); ctx.lineTo(m.l + pw, y); ctx.stroke();
+    ctx.fillText(e.toFixed(2), m.l - 8, y);
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const xticks = 5;
+  for (let i = 0; i <= xticks; i++) {
+    const k = kmin + (kmax - kmin) * i / xticks;
+    const x = X(k);
+    ctx.beginPath(); ctx.moveTo(x, m.t); ctx.lineTo(x, m.t + ph); ctx.stroke();
+    ctx.fillText(k.toFixed(2), x, m.t + ph + 6);
+  }
+
+  // Fermi level (E=0) if in range
+  if (0 >= emin && 0 <= emax) {
+    ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = muted;
+    const y0 = Y(0);
+    ctx.beginPath(); ctx.moveTo(m.l, y0); ctx.lineTo(m.l + pw, y0); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Axis titles
+  ctx.fillStyle = ink; ctx.font = "12px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.fillText("k-point (Brillouin-zone units)", m.l + pw / 2, cssH);
+  ctx.save();
+  ctx.translate(14, m.t + ph / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "top"; ctx.fillText("Energy (eV)", 0, 0);
+  ctx.restore();
+
+  const drawBand = (band, color, width, dash) => {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    band.forEach((e, i) => { const x = X(r.kPoints[i]), y = Y(e); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.restore();
+  };
+  const marker = (k, e, color) => {
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.arc(X(k), Y(e), 4.5, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = panel; ctx.lineWidth = 1.5; ctx.stroke();
+  };
+
+  const C = {
+    cbm: css.getPropertyValue("--cbm").trim() || "#e06666",
+    cbmHi: css.getPropertyValue("--cbm-hi").trim() || "#d98d00",
+    vbm: css.getPropertyValue("--vbm").trim() || "#6fa8dc",
+    vbmHi: css.getPropertyValue("--vbm-hi").trim() || "#2e9e57",
+    inter: css.getPropertyValue("--inter").trim() || "#8a94a6",
+    metal: css.getPropertyValue("--accent").trim() || "#3a6ff0",
+  };
+
+  if (r.cls.isMetal) {
+    r.bands.forEach(b => drawBand(b, C.metal, 1.6));
+  } else {
+    r.cls.conduction.forEach(i => drawBand(r.bands[i], i === r.cls.cbmIndex ? C.cbmHi : C.cbm, i === r.cls.cbmIndex ? 2.4 : 1.4));
+    r.cls.valence.forEach(i => drawBand(r.bands[i], i === r.cls.vbmIndex ? C.vbmHi : C.vbm, i === r.cls.vbmIndex ? 2.4 : 1.4));
+    r.cls.intermediate.forEach(i => drawBand(r.bands[i], C.inter, 1.4, [5, 4]));
+    if (r.cls.cbmIndex !== null) marker(r.cls.cbmK, r.cls.cbmValue, C.cbmHi);
+    if (r.cls.vbmIndex !== null) marker(r.cls.vbmK, r.cls.vbmValue, C.vbmHi);
+  }
+
+  // Legend
+  const legend = [];
+  if (r.cls.isMetal) legend.push(["Metallic band", C.metal, false]);
+  else {
+    if (r.cls.cbmIndex !== null) legend.push(["CBM", C.cbmHi, false]);
+    if (r.cls.conduction.length) legend.push(["Conduction", C.cbm, false]);
+    if (r.cls.vbmIndex !== null) legend.push(["VBM", C.vbmHi, false]);
+    if (r.cls.valence.length) legend.push(["Valence", C.vbm, false]);
+    if (r.cls.intermediate.length) legend.push(["Intermediate", C.inter, true]);
+  }
+  ctx.font = "11px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  let lx = m.l + 8, ly = m.t + 12;
+  legend.forEach(([label, color, dash]) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.save();
+    if (dash) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 20, ly); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = ink; ctx.fillText(label, lx + 26, ly);
+    lx += 26 + ctx.measureText(label).width + 18;
+    if (lx > m.l + pw - 60) { lx = m.l + 8; ly += 16; }
+  });
+}
+
+/* ============================ UI wiring ============================ */
+const els = {
+  drop: document.getElementById("drop"),
+  fileInput: document.getElementById("fileInput"),
+  browseBtn: document.getElementById("browseBtn"),
+  sampleBtn: document.getElementById("sampleBtn"),
+  lattice: document.getElementById("lattice"),
+  analyzeBtn: document.getElementById("analyzeBtn"),
+  status: document.getElementById("status"),
+  resultsBody: document.getElementById("resultsBody"),
+  exportTxt: document.getElementById("exportTxt"),
+  exportCsv: document.getElementById("exportCsv"),
+};
+
+let rawText = null;      // current CSV text
+let lastResult = null;   // last analysis result
+
+function setStatus(msg, kind) {
+  els.status.textContent = msg || "";
+  els.status.className = "status" + (kind ? " " + kind : "");
+}
+
+function loadText(text, sourceName) {
+  rawText = text;
+  els.analyzeBtn.disabled = false;
+  setStatus("Loaded " + (sourceName || "data") + ". Set the lattice parameter and click Analyze.", "ok");
+}
+
+els.browseBtn.addEventListener("click", () => els.fileInput.click());
+els.drop.addEventListener("click", () => els.fileInput.click());
+
+els.fileInput.addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadText(ev.target.result, file.name);
+  reader.onerror = () => setStatus("Could not read the file.", "err");
+  reader.readAsText(file);
+});
+
+["dragenter", "dragover"].forEach(ev => els.drop.addEventListener(ev, e => {
+  e.preventDefault(); els.drop.classList.add("hover");
+}));
+["dragleave", "drop"].forEach(ev => els.drop.addEventListener(ev, e => {
+  e.preventDefault(); els.drop.classList.remove("hover");
+}));
+els.drop.addEventListener("drop", e => {
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadText(ev.target.result, file.name);
+  reader.readAsText(file);
+});
+
+els.sampleBtn.addEventListener("click", () => {
+  els.lattice.value = SAMPLE_LATTICE;
+  loadText(SAMPLE_CSV, "sample data");
+});
+
+els.analyzeBtn.addEventListener("click", () => {
+  if (!rawText) { setStatus("Load a CSV file or the sample data first.", "err"); return; }
+  const a = Number(els.lattice.value);
+  if (!(a > 0)) { setStatus("Enter a valid positive lattice parameter (Å).", "err"); return; }
+  try {
+    const parsed = parseCSV(rawText);
+    lastResult = analyze(parsed, a);
+    renderResults(lastResult);
+    setStatus("Analysis complete.", "ok");
+  } catch (err) {
+    setStatus(err.message, "err");
+    lastResult = null;
+    els.exportTxt.disabled = true;
+    els.exportCsv.disabled = true;
+    els.resultsBody.innerHTML = '<div class="empty">' + escapeHtml(err.message) + '</div>';
+  }
+});
+
+function renderResults(r) {
+  const cls = r.cls;
+  const cards = [];
+  const typeBadge = cls.isMetal
+    ? '<span class="badge metal">METALLIC</span>'
+    : '<span class="badge semi">SEMICONDUCTOR</span>';
+  cards.push(card("Material", typeBadge));
+  cards.push(card("Bands detected", r.bands.length + " (" + r.numK + " k-pts each)"));
+
+  if (!cls.isMetal) {
+    if (cls.vbmValue !== -Infinity) cards.push(card("VBM", fmt(cls.vbmValue, 4) + " eV"));
+    if (cls.cbmValue !== Infinity) cards.push(card("CBM", fmt(cls.cbmValue, 4) + " eV"));
+    if (cls.bandGap !== null) {
+      const gb = cls.gapType === "Direct" ? "direct" : "indirect";
+      cards.push(card("Band gap", fmt(cls.bandGap, 4) + " eV &nbsp;<span class=\"badge " + gb + "\">" + cls.gapType + "</span>"));
+    }
+    if (r.electron) cards.push(card("Electron m*", r.electron.massKg.toExponential(3) + " kg<br><small style='color:var(--muted)'>m*/mₑ = " + fmt(r.electron.massRatio, 3) + "</small>"));
+    if (r.hole) cards.push(card("Hole m*", r.hole.massKg.toExponential(3) + " kg<br><small style='color:var(--muted)'>m*/mₑ = " + fmt(r.hole.massRatio, 3) + "</small>"));
+  }
+
+  const report = buildReport(r);
+  els.resultsBody.innerHTML =
+    '<div class="results">' +
+      '<div class="cards">' + cards.join("") + '</div>' +
+      '<canvas id="plot"></canvas>' +
+      '<pre class="log">' + escapeHtml(report) + '</pre>' +
+    '</div>';
+
+  const canvas = document.getElementById("plot");
+  drawPlot(canvas, r);
+
+  els.exportTxt.disabled = false;
+  els.exportCsv.disabled = false;
+}
+
+function card(k, vHtml) {
+  return '<div class="card"><div class="k">' + escapeHtml(k) + '</div><div class="v">' + vHtml + '</div></div>';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+els.exportTxt.addEventListener("click", () => {
+  if (lastResult) download("band_structure_report.txt", buildReport(lastResult), "text/plain");
+});
+els.exportCsv.addEventListener("click", () => {
+  if (!lastResult) return;
+  const r = lastResult;
+  const lines = ["k_point," + r.bands.map((_, i) => "band_" + (i + 1)).join(",")];
+  r.kPoints.forEach((k, ki) => {
+    lines.push([k].concat(r.bands.map(b => b[ki])).join(","));
+  });
+  download("parsed_bands.csv", lines.join("\n"), "text/csv");
+});
+
+// Redraw plot responsively.
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!lastResult) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const canvas = document.getElementById("plot");
+    if (canvas) drawPlot(canvas, lastResult);
+  }, 120);
+});
+</script>
+</body>
+</html>
