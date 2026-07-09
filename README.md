@@ -9,14 +9,14 @@ masses.
 
 There are two ways to use it:
 
-- **`index.html` — the browser app (recommended).** A single self-contained file that runs
+- **`effective mass calculator.html` — the browser app (recommended).** A single self-contained file that runs
   in any modern web browser on Windows, macOS, or Linux. **No Python and no installation of
   any kind.** Just open the file.
 - **`effective_mass_gui.py` — the original Python/tkinter app**, kept for reference and for
   users who prefer the desktop version. Requires Python and several libraries.
 
 ## Quick start (browser app — no install)
-1. Download **`index.html`** (from this repository).
+1. Download **`effective mass calculator.html`** (from this repository).
 2. **Double-click it** — it opens in your default browser (Chrome, Edge, Safari, Firefox…).
 3. Click **Load sample data** to try it immediately, or drag-and-drop your own CSV / click
    **Choose CSV…**.
@@ -24,7 +24,8 @@ There are two ways to use it:
 5. Click **Analyze**.
 
 It works completely offline and sends no data anywhere — everything runs locally in your
-browser. You can also host `index.html` on GitHub Pages to share a link.
+browser. You can also host this file on GitHub Pages to share a link (rename it to
+`index.html` first if you want it to load automatically as the site's home page).
 
 ## Features
 - Zero-install, cross-platform (runs in any browser)
